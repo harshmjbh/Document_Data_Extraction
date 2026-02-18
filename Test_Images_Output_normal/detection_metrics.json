@@ -1,0 +1,69 @@
+{
+  "input_dir": "C:\\Users\\HarshMalhotra\\OneDrive - United Green\\Documents\\Document_Data_Extraction\\Test_Images",
+  "output_dir": "C:\\Users\\HarshMalhotra\\OneDrive - United Green\\Documents\\Document_Data_Extraction\\Test_Images_Output_normal",
+  "method": "unet",
+  "fast": false,
+  "downscale": null,
+  "total_ms": 5627.7,
+  "total_seconds": 5.63,
+  "num_images": 11,
+  "avg_ms_per_image": 511.6,
+  "page_detected_count": 11,
+  "per_image": [
+    {
+      "file": "page_002_frame_000096.jpg",
+      "ms": 2019.6,
+      "page_detected": true
+    },
+    {
+      "file": "page_003_frame_000153.jpg",
+      "ms": 341.2,
+      "page_detected": true
+    },
+    {
+      "file": "page_004_frame_000210.jpg",
+      "ms": 390.0,
+      "page_detected": true
+    },
+    {
+      "file": "page_005_frame_000264.jpg",
+      "ms": 650.0,
+      "page_detected": true
+    },
+    {
+      "file": "page_006_frame_000327.jpg",
+      "ms": 358.2,
+      "page_detected": true
+    },
+    {
+      "file": "page_007_frame_000375.jpg",
+      "ms": 296.7,
+      "page_detected": true
+    },
+    {
+      "file": "page_008_frame_000423.jpg",
+      "ms": 358.0,
+      "page_detected": true
+    },
+    {
+      "file": "page_009_frame_000483.jpg",
+      "ms": 271.9,
+      "page_detected": true
+    },
+    {
+      "file": "page_010_frame_000537.jpg",
+      "ms": 322.6,
+      "page_detected": true
+    },
+    {
+      "file": "page_011_frame_000594.jpg",
+      "ms": 322.5,
+      "page_detected": true
+    },
+    {
+      "file": "page_012_frame_000684.jpg",
+      "ms": 294.8,
+      "page_detected": true
+    }
+  ]
+}

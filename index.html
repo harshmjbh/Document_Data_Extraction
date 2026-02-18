@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Page detection – image, video, camera</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; background: #f0f0f0; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+    .controls { margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    button, label { padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #999; background: #fff; cursor: pointer; }
+    button:hover { background: #eee; }
+    input[type="file"] { max-width: 260px; }
+    .wrap { position: relative; display: inline-block; }
+    #preview { display: block; max-width: 100%; }
+    #overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
+    .video-wrap, .camera-wrap { position: relative; display: block; width: 640px; max-width: 100%; height: 360px; background: #111; overflow: hidden; }
+    .video-wrap video, .camera-wrap video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; z-index: 0; }
+    .video-overlay, .camera-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+    .section { margin-bottom: 1.5rem; }
+    .section h2 { font-size: 1rem; margin: 0 0 0.5rem 0; }
+    .status { margin-top: 0.5rem; color: #333; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Page detection – bounding box</h1>
+  <p class="status" style="margin-bottom:1rem;">Supports <strong>image upload</strong>, <strong>video upload</strong>, and <strong>live camera</strong>. Bounding box is drawn in real time when the browser can read frames. Serve over HTTP (e.g. <code>python -m http.server 8000</code>) for the worker.</p>
+
+  <div class="section">
+    <h2>1. Image</h2>
+    <div class="controls">
+      <label>Upload image <input id="imageInput" type="file" accept="image/*" /></label>
+    </div>
+    <div class="wrap">
+      <img id="preview" alt="Preview" style="display: none;" />
+      <canvas id="overlay"></canvas>
+    </div>
+    <p class="status" id="imageStatus">Upload an image to detect the page.</p>
+  </div>
+
+  <div class="section">
+    <h2>2. Video</h2>
+    <div class="controls">
+      <label>Upload video <input id="videoInput" type="file" accept="video/*" /></label>
+      <button type="button" id="playVideoBtn">Play</button>
+      <button type="button" id="pauseVideoBtn">Pause</button>
+    </div>
+    <div class="video-wrap">
+      <video id="videoEl" playsinline muted loop controls preload="auto"></video>
+      <canvas id="videoOverlay" class="video-overlay"></canvas>
+    </div>
+    <p class="status" id="videoStatus">Upload any video. When the browser can read frames, the green box appears in real time.</p>
+  </div>
+
+  <div class="section">
+    <h2>3. Live camera</h2>
+    <div class="controls">
+      <button type="button" id="startCameraBtn">Start camera</button>
+      <button type="button" id="stopCameraBtn">Stop camera</button>
+    </div>
+    <div class="camera-wrap">
+      <video id="cameraEl" playsinline autoplay style="display:none;"></video>
+      <canvas id="cameraOverlay" class="camera-overlay"></canvas>
+    </div>
+    <p class="status" id="cameraStatus">Start the camera and point it at a page for real-time detection.</p>
+  </div>
+
+  <script src="page-detection.js"></script>
+  <script>
+(function () {
+  // detectPage() from page-detection.js is used for image; worker uses it for video/camera
+
+  // ---------- Image UI ----------
+  const imageInput = document.getElementById("imageInput");
+  const preview = document.getElementById("preview");
+  const overlay = document.getElementById("overlay");
+  const imageStatus = document.getElementById("imageStatus");
+
+  function drawBox(ctx, quad, scale) {
+    if (!quad || quad.length !== 4) return;
+    ctx.strokeStyle = "#00ff00";
+    ctx.lineWidth = Math.max(2, 3 * (scale || 1));
+    ctx.beginPath();
+    ctx.moveTo(quad[0].x * scale, quad[0].y * scale);
+    for (let i = 1; i <= 4; i++) ctx.lineTo(quad[i % 4].x * scale, quad[i % 4].y * scale);
+    ctx.stroke();
+  }
+
+  function runDetectionOnImage(img) {
+    const maxDim = 640;
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    const s = Math.min(1, maxDim / Math.max(w, h));
+    const cw = (w * s) | 0, ch = (h * s) | 0;
+    const canvas = document.createElement("canvas");
+    canvas.width = cw; canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, cw, ch);
+    const quad = detectPage(ctx.getImageData(0, 0, cw, ch));
+    return { quad, detectW: cw, detectH: ch, imgW: w, imgH: h };
+  }
+
+  function showImageResult(img, result) {
+    preview.src = img.src;
+    preview.style.display = "block";
+    const w = result.imgW, h = result.imgH;
+    const displayScale = Math.min(1, 800 / Math.max(w, h));
+    const cw = (w * displayScale) | 0, ch = (h * displayScale) | 0;
+    preview.style.width = cw + "px"; preview.style.height = ch + "px";
+    overlay.width = cw; overlay.height = ch;
+    overlay.style.width = cw + "px"; overlay.style.height = ch + "px";
+    const ctx = overlay.getContext("2d");
+    ctx.clearRect(0, 0, cw, ch);
+    if (result.quad) {
+      const scale = cw / result.detectW;
+      const q = result.quad.map(p => ({ x: p.x * scale, y: p.y * scale }));
+      drawBox(ctx, q, 1);
+      imageStatus.textContent = "Page detected. Green box = bounding box.";
+    } else {
+      imageStatus.textContent = "No page detected. Try a clearer image.";
+    }
+  }
+
+  imageInput.addEventListener("change", function () {
+    const file = this.files && this.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = function () {
+      imageStatus.textContent = "Detecting...";
+      setTimeout(() => { const r = runDetectionOnImage(img); showImageResult(img, r); }, 10);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+  // ---------- Shared: Worker for video & camera detection ----------
+  const DETECT_INTERVAL_MS = 150;
+  const DETECT_MAX_PX = 400;
+
+  let worker = null;
+  var detectQueue = [];
+
+  function ensureWorker(onError) {
+    if (worker) return worker;
+    try {
+      worker = new Worker("detection-worker.js");
+      worker.onmessage = function (e) {
+        var entry = detectQueue.shift();
+        if (entry) entry.cb(e.data.quad, entry.w, entry.h);
+      };
+      worker.onerror = function () {
+        if (onError) onError("Worker failed. Serve over HTTP (e.g. python -m http.server 8000).");
+      };
+    } catch (err) {
+      if (onError) onError("Worker not available: " + err.message);
+      return null;
+    }
+    return worker;
+  }
+
+  function runDetectionOnFrame(videoEl, onResult) {
+    if (!worker || !videoEl.videoWidth) return;
+    var vw = videoEl.videoWidth, vh = videoEl.videoHeight;
+    var scale = Math.min(1, DETECT_MAX_PX / Math.max(vw, vh));
+    var cw = (vw * scale) | 0, ch = (vh * scale) | 0;
+    var canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(videoEl, 0, 0, cw, ch);
+    var imageData = ctx.getImageData(0, 0, cw, ch);
+    detectQueue.push({ cb: onResult, w: cw, h: ch });
+    worker.postMessage({ width: cw, height: ch, data: imageData.data.buffer }, [imageData.data.buffer]);
+  }
+
+  // ---------- 2. Video ----------
+  const videoInput = document.getElementById("videoInput");
+  const videoEl = document.getElementById("videoEl");
+  const videoWrap = document.querySelector(".video-wrap");
+  const videoOverlay = document.getElementById("videoOverlay");
+  const videoStatus = document.getElementById("videoStatus");
+
+  let videoLastQuad = null, videoLastW = 0, videoLastH = 0, videoPlaying = false, videoOverlayId = null;
+
+  function drawVideoOverlay() {
+    var dw = videoWrap ? (videoWrap.clientWidth || 640) : 640;
+    var dh = videoWrap ? (videoWrap.clientHeight || 360) : 360;
+    if (dw <= 0) dw = 640;
+    if (dh <= 0) dh = 360;
+    if (videoOverlay.width !== dw || videoOverlay.height !== dh) {
+      videoOverlay.width = dw;
+      videoOverlay.height = dh;
+      videoOverlay.style.width = dw + "px";
+      videoOverlay.style.height = dh + "px";
+    }
+    var ctx = videoOverlay.getContext("2d");
+    ctx.clearRect(0, 0, dw, dh);
+    if (videoLastQuad && videoLastW > 0 && videoLastH > 0) {
+      var sx = dw / videoLastW, sy = dh / videoLastH;
+      var q = videoLastQuad.map(function (p) { return { x: p.x * sx, y: p.y * sy }; });
+      drawBox(ctx, q, 1);
+    }
+    videoOverlayId = requestAnimationFrame(drawVideoOverlay);
+  }
+
+  function startVideoDetection() {
+    if (!ensureWorker(function (msg) { videoStatus.textContent = msg; })) return;
+    videoPlaying = true;
+    if (!videoOverlayId) drawVideoOverlay();
+    var hasFrames = videoEl.videoWidth && videoEl.videoHeight && videoEl.readyState >= 2;
+    if (hasFrames) {
+      videoStatus.textContent = "Playing. Detecting page in real time.";
+    } else {
+      videoStatus.textContent = "Video playing. Page detection may not be available for this format in your browser.";
+    }
+    function tick() {
+      if (!videoPlaying) return;
+      runDetectionOnFrame(videoEl, function (quad, w, h) {
+        videoLastQuad = quad;
+        videoLastW = w;
+        videoLastH = h;
+      });
+      setTimeout(tick, DETECT_INTERVAL_MS);
+    }
+    setTimeout(tick, DETECT_INTERVAL_MS);
+  }
+
+  function stopVideoDetection() {
+    videoPlaying = false;
+    if (videoOverlayId) {
+      cancelAnimationFrame(videoOverlayId);
+      videoOverlayId = null;
+    }
+  }
+
+  drawVideoOverlay();
+
+  videoEl.addEventListener("play", startVideoDetection);
+  videoEl.addEventListener("pause", stopVideoDetection);
+  videoEl.addEventListener("ended", stopVideoDetection);
+  videoEl.addEventListener("error", function () {
+    var e = videoEl.error;
+    videoStatus.textContent = e && e.message ? "Video error: " + e.message : "Video failed to load or play.";
+  });
+  videoEl.addEventListener("loadedmetadata", function () {
+    videoStatus.textContent = "Video loaded. Click Play for real-time page detection.";
+  });
+  document.getElementById("playVideoBtn").addEventListener("click", function () {
+    if (!videoEl.src) { videoStatus.textContent = "Upload a video first."; return; }
+    videoEl.currentTime = 0;
+    videoEl.play().catch(function (err) { videoStatus.textContent = "Play failed: " + (err.message || "unknown"); });
+  });
+  document.getElementById("pauseVideoBtn").addEventListener("click", function () { videoEl.pause(); });
+  videoInput.addEventListener("change", function () {
+    var file = this.files && this.files[0];
+    if (!file) return;
+    stopVideoDetection();
+    videoLastQuad = null; videoLastW = 0; videoLastH = 0;
+    videoStatus.textContent = "Loading video…";
+    videoEl.src = URL.createObjectURL(file);
+    videoEl.load();
+  });
+
+  // ---------- 3. Live camera ----------
+  const startCameraBtn = document.getElementById("startCameraBtn");
+  const stopCameraBtn = document.getElementById("stopCameraBtn");
+  const cameraEl = document.getElementById("cameraEl");
+  const cameraWrap = document.querySelector(".camera-wrap");
+  const cameraOverlay = document.getElementById("cameraOverlay");
+  const cameraStatus = document.getElementById("cameraStatus");
+
+  let cameraStream = null, cameraLastQuad = null, cameraLastW = 0, cameraLastH = 0;
+  let cameraRunning = false, cameraOverlayId = null;
+
+  function drawCameraOverlay() {
+    var dw = cameraWrap ? (cameraWrap.clientWidth || 640) : 640;
+    var dh = cameraWrap ? (cameraWrap.clientHeight || 360) : 360;
+    if (dw <= 0) dw = 640;
+    if (dh <= 0) dh = 360;
+    if (cameraOverlay.width !== dw || cameraOverlay.height !== dh) {
+      cameraOverlay.width = dw;
+      cameraOverlay.height = dh;
+      cameraOverlay.style.width = dw + "px";
+      cameraOverlay.style.height = dh + "px";
+    }
+    var ctx = cameraOverlay.getContext("2d");
+    ctx.clearRect(0, 0, dw, dh);
+    if (cameraLastQuad && cameraLastW > 0 && cameraLastH > 0) {
+      var sx = dw / cameraLastW, sy = dh / cameraLastH;
+      var q = cameraLastQuad.map(function (p) { return { x: p.x * sx, y: p.y * sy }; });
+      drawBox(ctx, q, 1);
+    }
+    cameraOverlayId = requestAnimationFrame(drawCameraOverlay);
+  }
+
+  startCameraBtn.addEventListener("click", async function () {
+    if (!ensureWorker(function (msg) { cameraStatus.textContent = msg; })) return;
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      cameraEl.srcObject = cameraStream;
+      cameraEl.style.display = "block";
+      await cameraEl.play();
+      cameraRunning = true;
+      cameraStatus.textContent = "Camera on. Detecting page in real time.";
+      if (!cameraOverlayId) drawCameraOverlay();
+      function tick() {
+        if (!cameraRunning) return;
+        runDetectionOnFrame(cameraEl, function (quad, w, h) {
+          cameraLastQuad = quad;
+          cameraLastW = w;
+          cameraLastH = h;
+        });
+        setTimeout(tick, DETECT_INTERVAL_MS);
+      }
+      setTimeout(tick, DETECT_INTERVAL_MS);
+    } catch (err) {
+      cameraStatus.textContent = "Camera error: " + (err.message || "permission denied");
+    }
+  });
+
+  stopCameraBtn.addEventListener("click", function () {
+    cameraRunning = false;
+    if (cameraOverlayId) {
+      cancelAnimationFrame(cameraOverlayId);
+      cameraOverlayId = null;
+    }
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(function (t) { t.stop(); });
+      cameraStream = null;
+    }
+    cameraEl.srcObject = null;
+    cameraEl.style.display = "none";
+    cameraLastQuad = null;
+    cameraStatus.textContent = "Camera stopped. Start camera to try again.";
+  });
+})();
+  </script>
+</body>
+</html>

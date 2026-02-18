@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+.eggs/
+
+# rembg / U²-Net model cache (downloaded at runtime)
+.u2net/
+
+# Emscripten SDK (large, install via emsdk install)
+emsdk/
+
+# IDE / editor
+.cursor/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Optional: large test outputs (uncomment if you don't want to track output images)
+# Test_Images_Output*/
+# Test_Images_2_Output*/
+# archived_detection_outputs.zip
+
+# Large video outputs (uncomment to avoid pushing)
+# *_with_boxes.mp4
+# test_hw_slow_GD_with_boxes.mp4

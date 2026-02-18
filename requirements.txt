@@ -1,0 +1,6 @@
+opencv-python>=4.8.0
+numpy>=1.20.0
+
+# For foolproof detection (--method rembg or auto fallback). Use rembg[gpu] for CUDA.
+rembg[cpu]>=2.0.50
+Pillow>=9.0.0

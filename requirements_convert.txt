@@ -1,0 +1,2 @@
+# For convert_to_h264.py (bundles ffmpeg, no separate install)
+imageio-ffmpeg>=0.4.9

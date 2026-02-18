@@ -1,0 +1,34 @@
+{
+  "input_dir": "C:\\Users\\HarshMalhotra\\OneDrive - United Green\\Documents\\Document_Data_Extraction\\Test_Images_2",
+  "output_dir": "C:\\Users\\HarshMalhotra\\OneDrive - United Green\\Documents\\Document_Data_Extraction\\Test_Images_2_Output_normal",
+  "method": "unet",
+  "fast": false,
+  "downscale": null,
+  "total_ms": 3928.8,
+  "total_seconds": 3.93,
+  "num_images": 4,
+  "avg_ms_per_image": 982.2,
+  "page_detected_count": 4,
+  "per_image": [
+    {
+      "file": "output_115.jpg",
+      "ms": 2606.5,
+      "page_detected": true
+    },
+    {
+      "file": "output_160.jpg",
+      "ms": 267.4,
+      "page_detected": true
+    },
+    {
+      "file": "output_2.jpg",
+      "ms": 285.1,
+      "page_detected": true
+    },
+    {
+      "file": "output_241.jpg",
+      "ms": 768.6,
+      "page_detected": true
+    }
+  ]
+}
